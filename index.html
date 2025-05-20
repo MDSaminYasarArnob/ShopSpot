@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ShopSpot App - Persistent Lists</title>
+    <title>ShopSpot App - Full Width</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         :root {
@@ -18,13 +18,31 @@
         html, body {
             margin: 0; padding: 0; height: 100%; overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #E0E0E0;
+            background-color: var(--background-white); /* App background will cover this on mobile */
         }
         .app-container {
-            width: 100%; height: 100%; max-width: 414px; margin: 0 auto;
-            background-color: var(--background-white); display: flex; flex-direction: column;
-            position: relative; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.15);
+            width: 100%; 
+            height: 100%;
+            /* max-width: 414px; */ /* REMOVED - This was likely causing the narrowness in BlueStacks */
+            /* margin: 0 auto; */   /* No longer needed if max-width is removed for mobile-first full width */
+            background-color: var(--background-white); 
+            display: flex; 
+            flex-direction: column;
+            position: relative; 
+            overflow: hidden; 
+            /* box-shadow: 0 0 20px rgba(0,0,0,0.15); */ /* REMOVED - For a more flush, native feel */
         }
+
+        /* Optional: If you want to re-introduce a max-width for desktop viewing only */
+        /* @media (min-width: 600px) { 
+            .app-container {
+                max-width: 450px;
+                margin: 0 auto;
+                box-shadow: 0 0 20px rgba(0,0,0,0.15);
+                border-radius: 10px; // Optional: if you want rounded corners on desktop view
+            }
+        } */
+
         .app-header-container { padding: 20px 20px 0; margin-top: 5px; flex-shrink: 0; }
         .app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .app-title { font-size: 32px; font-weight: var(--font-weight-title); color: var(--text-dark); margin: 0; }
@@ -176,7 +194,6 @@
         .history-list-header .original-date { font-size: 11px; color: var(--text-light); }
         .history-list-header .expand-icon::before { content: '▼'; font-size: 12px; }
         .history-list-card.expanded .history-list-header .expand-icon::before { content: '▲'; }
-        /* Delete button for history items */
         .history-list-card .delete-history-btn { margin-left: 10px; }
 
         .history-item-list {
@@ -233,7 +250,6 @@
             </button>
             <button class="nav-item" onclick="showMainTab('history-tab', this)">
                 <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7v-2c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5h1.83l-1.51-1.51.01-.01C6.04 10.15 6 11.07 6 12c0 3.87 3.13 7 7 7s7-3.13 7-7-3.13-7-7-7zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/></svg></span>
-                <!-- Replaced History icon with a clock/history like icon -->
                 <span>History</span>
             </button>
         </nav>
@@ -251,15 +267,15 @@
         const { jsPDF } = window.jspdf;
 
         let currentCheckbox = null;
-        let currentListCardForAction = null;
+        let currentListCardForAction = null; // Stores list ID for item operations or list data for list edits
         let confirmModalCallback = null;
-        let currentItemForAction = null; // Changed from currentItemForEdit for broader use
+        let currentItemForAction = null;     // Stores item ID for item edits/deletes
 
-        let activeListsData = []; // For lists on the "Lists" tab
-        let historyData = [];     // For lists on the "History" tab
+        let activeListsData = []; 
+        let historyData = [];     
 
-        const ACTIVE_LISTS_STORAGE_KEY = 'shopSpotActiveLists';
-        const HISTORY_STORAGE_KEY = 'shopSpotHistory';
+        const ACTIVE_LISTS_STORAGE_KEY = 'shopSpotActiveLists_v2'; // Changed key to avoid conflicts with old data
+        const HISTORY_STORAGE_KEY = 'shopSpotHistory_v2';
 
         // --- Persistence Functions ---
         function saveData(key, data) {
@@ -279,64 +295,56 @@
         function openModal(modalId) { document.getElementById(modalId).style.display = 'flex'; }
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
-            // Clear inputs
-            const inputs = document.getElementById(modalId).querySelectorAll('input[type="text"], input[type="number"]');
-            inputs.forEach(input => input.value = '');
+            const modal = document.getElementById(modalId);
+            if (modal) { // Ensure modal exists
+                const inputs = modal.querySelectorAll('input[type="text"], input[type="number"]');
+                inputs.forEach(input => input.value = '');
+            }
             if (modalId === 'editItemModal' || modalId === 'addNewItemModal') currentItemForAction = null;
             if (modalId === 'editListModal' || modalId === 'addNewListModal') currentListCardForAction = null;
         }
 
+
         // --- Tab Navigation ---
         function showTab(tabId) {
             document.querySelectorAll('.top-tabs .tab-button, .bottom-nav .nav-item').forEach(b => b.classList.remove('active'));
-            document.querySelector(`.top-tabs .tab-button[onclick="showTab('${tabId}')"]`).classList.add('active');
-            document.querySelector(`.bottom-nav .nav-item[onclick="showMainTab('${tabId}', this)"]`).classList.add('active');
+            
+            const topTabButton = document.querySelector(`.top-tabs .tab-button[onclick="showTab('${tabId}')"]`);
+            if (topTabButton) topTabButton.classList.add('active');
+            
+            const bottomNavButton = document.querySelector(`.bottom-nav .nav-item[onclick="showMainTab('${tabId}', this)"]`);
+            if (bottomNavButton) bottomNavButton.classList.add('active');
+            
             showMainTabContent(tabId);
         }
-        function showMainTab(tabId, clickedButton) { showTab(tabId); } // Simplified as top/bottom are synced
+        function showMainTab(tabId, clickedButton) { showTab(tabId); }
         function showMainTabContent(tabId) {
             document.querySelectorAll('.content-area .tab-content').forEach(c => c.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
+            const activeContent = document.getElementById(tabId);
+            if (activeContent) activeContent.classList.add('active');
+            
             if (tabId === 'home-tab') renderActiveLists();
             if (tabId === 'history-tab') renderHistoryTab();
         }
 
-        // --- Core List Data Structure (Helper) ---
-        function getListCardData(listCardEl) {
-            const id = listCardEl.id;
-            const title = listCardEl.querySelector('.list-title').textContent;
-            const creationDateISO = listCardEl.dataset.creationDate;
-            const items = [];
-            listCardEl.querySelectorAll('.item-list .item').forEach(itemEl => {
-                items.push(getItemData(itemEl));
-            });
-            return { id, title, creationDateISO, items };
-        }
-        function getItemData(itemEl) {
-            const name = itemEl.querySelector('.item-name').textContent;
-            const weightEl = itemEl.querySelector('.item-weight');
-            const weight = weightEl ? weightEl.textContent.replace(/[()]/g, '') : '';
-            const purchased = itemEl.querySelector('input[type="checkbox"]').checked;
-            const priceText = itemEl.querySelector('.price-value').textContent;
-            const price = purchased && priceText ? parseFloat(priceText.replace('$', '')) : 0;
-            const notes = itemEl.querySelector('.notes-value').textContent;
-            const itemId = itemEl.dataset.itemId || `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`; // Ensure item ID
-            itemEl.dataset.itemId = itemId;
-            return { id: itemId, name, weight, purchased, price, notes };
-        }
+        // --- Data Structure Helpers ---
+        function getListFromDOM(listCardEl) { /* Not strictly needed if we operate on data arrays */ }
+        function getItemDataFromDOM(itemEl) { /* Not strictly needed if we operate on data arrays */ }
         function findListIndex(listId, dataArray) { return dataArray.findIndex(list => list.id === listId); }
         function findItemIndex(itemId, itemsArray) { return itemsArray.findIndex(item => item.id === itemId); }
-
 
         // --- Active List Rendering & Management ---
         function renderActiveLists() {
             const listsContainer = document.getElementById('lists-container');
-            listsContainer.innerHTML = ''; // Clear before re-render
-            activeListsData.sort((a,b) => new Date(b.creationDateISO) - new Date(a.creationDateISO)); // Show newest first
+            listsContainer.innerHTML = ''; 
+            activeListsData.sort((a,b) => new Date(b.creationDateISO) - new Date(a.creationDateISO)); 
             activeListsData.forEach(listData => {
-                const listCard = createListCardDOM(listData, false); // false for not history
+                const listCard = createListCardDOM(listData); 
                 listsContainer.appendChild(listCard);
             });
+             if (activeListsData.length === 0 && document.getElementById('home-tab').classList.contains('active')) {
+                listsContainer.innerHTML = '<p style="text-align: center; color: var(--text-light); margin-top: 20px;">No active lists. Create one!</p>';
+            }
         }
 
         document.getElementById('masterAddListButton').addEventListener('click', () => {
@@ -347,63 +355,61 @@
             const title = document.getElementById('newListTitleInput').value.trim();
             if (!title) { alert("List title cannot be empty."); return; }
             const newListData = {
-                id: `list-${Date.now()}`,
+                id: `list-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
                 title: title,
                 creationDateISO: new Date().toISOString(),
                 items: []
             };
             activeListsData.push(newListData);
             saveData(ACTIVE_LISTS_STORAGE_KEY, activeListsData);
-            renderActiveLists(); // Re-render all active lists
+            renderActiveLists(); 
             closeModal('addNewListModal');
         }
 
-        function createListCardDOM(listData, isHistoryCard) {
+        function createListCardDOM(listData) {
             const creationDateString = new Date(listData.creationDateISO).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
             const listCard = document.createElement('section');
             listCard.classList.add('grocery-list-card');
             listCard.id = listData.id;
             listCard.dataset.creationDate = listData.creationDateISO;
 
-            let listActionsHTML = `
-                <button title="Download PDF" class="icon-btn download-pdf-btn">
-                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                </button>
-                <button title="Edit List" class="icon-btn edit-list-btn">
-                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                </button>
-                <button title="Archive List" class="icon-btn archive-list-btn">
-                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                </button>`;
-            
             listCard.innerHTML = `
                 <div class="list-header">
                     <h2 class="list-title">${listData.title}</h2>
-                    <div class="list-actions">${listActionsHTML}</div>
+                    <div class="list-actions">
+                        <button title="Download PDF" class="icon-btn download-pdf-btn">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        </button>
+                        <button title="Edit List" class="icon-btn edit-list-btn">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </button>
+                        <button title="Archive List" class="icon-btn archive-list-btn">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        </button>
+                    </div>
                 </div>
                 <p class="list-date-stamp">${creationDateString} (Created)</p>
                 <ul class="item-list"></ul>
-                <button class="add-item-to-list-btn">Add Item to This List</button>
+                <button class="add-item-to-list-btn">Add Item</button>
                 <div class="list-total-price"><span class="total-label">Total:</span> <span class="total-value">$0.00</span></div>`;
 
             const itemListUl = listCard.querySelector('.item-list');
             listData.items.forEach(itemData => {
-                const itemLi = createItemDOM(itemData);
+                const itemLi = createItemDOM(itemData, listData.id); // Pass listId for context
                 itemListUl.appendChild(itemLi);
             });
 
             listCard.querySelector('.edit-list-btn').addEventListener('click', () => openEditListModal(listCard.id));
             listCard.querySelector('.archive-list-btn').addEventListener('click', () => openArchiveListModal(listCard.id));
-            listCard.querySelector('.download-pdf-btn').addEventListener('click', () => downloadListAsPDF(listCard));
+            listCard.querySelector('.download-pdf-btn').addEventListener('click', () => downloadListAsPDF(listData)); // Pass listData
             listCard.querySelector('.add-item-to-list-btn').addEventListener('click', () => {
-                currentListCardForAction = listCard.id; // Store ID
+                currentListCardForAction = listCard.id; 
                 openModal('addNewItemModal'); document.getElementById('newItemNameInput').focus();
             });
-            updateListTotal(listCard);
+            updateListTotal(listCard, listData); // Pass listData for calculation
             return listCard;
         }
         
-        // --- Item Management within Active Lists ---
         function handleSaveNewItem() {
             const name = document.getElementById('newItemNameInput').value.trim();
             const weight = document.getElementById('newItemWeightInput').value.trim();
@@ -419,15 +425,15 @@
             };
             activeListsData[listIndex].items.push(newItemData);
             saveData(ACTIVE_LISTS_STORAGE_KEY, activeListsData);
-            renderActiveLists(); // Re-render to show new item
+            renderActiveLists(); 
             closeModal('addNewItemModal');
         }
 
-        function createItemDOM(itemData) {
+        function createItemDOM(itemData, listId) {
             const itemLi = document.createElement('li');
             itemLi.classList.add('item');
             itemLi.dataset.itemId = itemData.id;
-            itemLi.dataset.price = itemData.price || 0;
+            itemLi.dataset.price = itemData.price || 0; // Store price for recalc
 
             itemLi.innerHTML = `
                 <label class="checkbox-container"><input type="checkbox" ${itemData.purchased ? 'checked' : ''}></label>
@@ -436,7 +442,7 @@
                     ${itemData.weight ? `<span class="item-weight">(${itemData.weight})</span>` : ''}
                 </div>
                 <span class="item-details">
-                    <span class="price-value">${itemData.purchased && itemData.price > 0 ? `$${itemData.price.toFixed(2)}` : ''}</span>
+                    <span class="price-value">${itemData.purchased && typeof itemData.price === 'number' && itemData.price > 0 ? `$${itemData.price.toFixed(2)}` : ''}</span>
                     <span class="notes-value">${itemData.notes || ''}</span>
                 </span>
                 <div class="item-actions-inline">
@@ -447,21 +453,23 @@
                         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                     </button>
                 </div>`;
-            itemLi.querySelector('input[type="checkbox"]').addEventListener('change', (e) => handleItemCheck(e.target));
-            itemLi.querySelector('.edit-item-btn').addEventListener('click', () => openEditItemModal(itemLi.dataset.itemId, itemLi.closest('.grocery-list-card').id));
-            itemLi.querySelector('.delete-item-btn').addEventListener('click', () => openDeleteItemConfirmModal(itemLi.dataset.itemId, itemLi.closest('.grocery-list-card').id));
+            itemLi.querySelector('input[type="checkbox"]').addEventListener('change', (e) => handleItemCheck(e.target, listId, itemData.id));
+            itemLi.querySelector('.edit-item-btn').addEventListener('click', () => openEditItemModal(itemData.id, listId));
+            itemLi.querySelector('.delete-item-btn').addEventListener('click', () => openDeleteItemConfirmModal(itemData.id, listId));
             return itemLi;
         }
         
-        function handleItemCheck(checkbox) {
-            const itemLi = checkbox.closest('.item');
-            const listCard = itemLi.closest('.grocery-list-card');
-            const listIndex = findListIndex(listCard.id, activeListsData);
-            const itemIndex = findItemIndex(itemLi.dataset.itemId, activeListsData[listIndex].items);
+        function handleItemCheck(checkbox, listId, itemId) {
+            const listIndex = findListIndex(listId, activeListsData);
+            if (listIndex === -1) return;
+            const itemIndex = findItemIndex(itemId, activeListsData[listIndex].items);
+            if (itemIndex === -1) return;
+            
+            currentItemForAction = activeListsData[listIndex].items[itemIndex]; // The item data object
+            currentListCardForAction = listId; // The list ID
 
             if (checkbox.checked) {
-                currentCheckbox = checkbox; // For price modal
-                currentItemForAction = activeListsData[listIndex].items[itemIndex]; // Pass item data
+                currentCheckbox = checkbox; 
                 openModal('priceModal');
                 document.getElementById('itemPriceInput').value = currentItemForAction.price > 0 ? currentItemForAction.price.toFixed(2) : '';
                 document.getElementById('itemNotesInput').value = currentItemForAction.notes || '';
@@ -471,15 +479,20 @@
                 activeListsData[listIndex].items[itemIndex].price = 0;
                 activeListsData[listIndex].items[itemIndex].notes = '';
                 saveData(ACTIVE_LISTS_STORAGE_KEY, activeListsData);
-                renderActiveLists(); // Efficient would be to update just the item and total
+                renderActiveLists(); 
             }
         }
 
         function closePriceModal(isConfirmed) {
-            const itemLi = currentCheckbox.closest('.item');
-            const listCard = itemLi.closest('.grocery-list-card');
-            const listIndex = findListIndex(listCard.id, activeListsData);
-            const itemIndex = findItemIndex(itemLi.dataset.itemId, activeListsData[listIndex].items);
+            if (!currentItemForAction || !currentListCardForAction) { // currentItemForAction is item data, currentList is ID
+                 if(currentCheckbox) currentCheckbox.checked = false; // safety
+                 closeModal('priceModal');
+                 currentCheckbox = null;
+                 return;
+            }
+
+            const listIndex = findListIndex(currentListCardForAction, activeListsData);
+            const itemIndex = findItemIndex(currentItemForAction.id, activeListsData[listIndex].items);
 
             if (isConfirmed) {
                 const price = parseFloat(document.getElementById('itemPriceInput').value) || 0;
@@ -487,35 +500,32 @@
                 activeListsData[listIndex].items[itemIndex].purchased = true;
                 activeListsData[listIndex].items[itemIndex].price = price;
                 activeListsData[listIndex].items[itemIndex].notes = notes;
-            } else { // Cancelled or no price, so uncheck
-                 if (currentCheckbox) currentCheckbox.checked = false; // Uncheck the box visually
+            } else { 
+                 if (currentCheckbox) currentCheckbox.checked = false; 
                  activeListsData[listIndex].items[itemIndex].purchased = false;
                  activeListsData[listIndex].items[itemIndex].price = 0;
                  activeListsData[listIndex].items[itemIndex].notes = '';
             }
             saveData(ACTIVE_LISTS_STORAGE_KEY, activeListsData);
-            renderActiveLists(); // Re-render
+            renderActiveLists(); 
             closeModal('priceModal');
             currentCheckbox = null;
             currentItemForAction = null;
+            currentListCardForAction = null;
         }
 
-        function updateListTotal(listCardEl) { // Primarily for visual update after DOM manipulation
-            if (!listCardEl) return;
+        function updateListTotal(listCardEl, listDataObj) { 
+            if (!listCardEl || !listDataObj) return;
             let total = 0;
-            const listData = activeListsData.find(list => list.id === listCardEl.id);
-            if(listData) {
-                listData.items.forEach(item => {
-                    if (item.purchased) total += (item.price || 0);
-                });
-            }
+            listDataObj.items.forEach(item => {
+                if (item.purchased) total += (item.price || 0);
+            });
             const totalEl = listCardEl.querySelector('.list-total-price .total-value');
             if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
         }
         
-        // --- Edit List Title ---
         function openEditListModal(listId) {
-            currentListCardForAction = listId; // Store ID
+            currentListCardForAction = listId; 
             const listData = activeListsData.find(list => list.id === listId);
             if (!listData) return;
             document.getElementById('editListTitleInput').value = listData.title;
@@ -523,7 +533,7 @@
         }
         function handleSaveListTitleEdit() {
             const listIndex = findListIndex(currentListCardForAction, activeListsData);
-            if (listIndex === -1) return;
+            if (listIndex === -1) { closeModal('editListModal'); return; }
             const newTitle = document.getElementById('editListTitleInput').value.trim();
             if (newTitle) {
                 activeListsData[listIndex].title = newTitle;
@@ -533,52 +543,47 @@
             closeModal('editListModal');
         }
 
-        // --- Archive List ---
         function openArchiveListModal(listId) {
             const listData = activeListsData.find(list => list.id === listId);
             if (!listData) return;
             document.getElementById('confirmModalTitle').textContent = "Archive List";
-            document.getElementById('confirmModalMessage').textContent = `Archive list "${listData.title}"? It will be moved to History.`;
+            document.getElementById('confirmModalMessage').textContent = `Archive list "${listData.title}"?`;
             document.getElementById('confirmModalConfirmBtn').textContent = "Archive";
             confirmModalCallback = () => {
                 const listIndex = findListIndex(listId, activeListsData);
                 if (listIndex > -1) {
                     const [archivedList] = activeListsData.splice(listIndex, 1);
-                    archivedList.completionDateISO = new Date().toISOString(); // Add completion date
+                    archivedList.completionDateISO = new Date().toISOString();
                     historyData.push(archivedList);
                     historyData.sort((a, b) => new Date(b.completionDateISO) - new Date(a.completionDateISO));
                     saveData(ACTIVE_LISTS_STORAGE_KEY, activeListsData);
                     saveData(HISTORY_STORAGE_KEY, historyData);
                     renderActiveLists();
-                    renderHistoryTab(); // If history tab is active or needs update
+                    renderHistoryTab();
                 }
             };
             openModal('confirmModal');
         }
-
-        // --- Edit Item ---
+        
         function openEditItemModal(itemId, listId) {
-            currentListCardForAction = listId; // list ID
-            currentItemForAction = itemId; // item ID
+            currentListCardForAction = listId; 
+            currentItemForAction = itemId; 
             const listIndex = findListIndex(listId, activeListsData);
             if (listIndex === -1) return;
             const itemIndex = findItemIndex(itemId, activeListsData[listIndex].items);
             if (itemIndex === -1) return;
             const itemData = activeListsData[listIndex].items[itemIndex];
-
             document.getElementById('editItemNameInput').value = itemData.name;
             document.getElementById('editItemWeightInput').value = itemData.weight || '';
             openModal('editItemModal'); document.getElementById('editItemNameInput').focus();
         }
         function handleSaveItemEdit() {
-            if (!currentItemForAction || !currentListCardForAction) return;
+            if (!currentItemForAction || !currentListCardForAction) { closeModal('editItemModal'); return; }
             const newName = document.getElementById('editItemNameInput').value.trim();
             const newWeight = document.getElementById('editItemWeightInput').value.trim();
             if (!newName) { alert("Item name cannot be empty."); return; }
-
             const listIndex = findListIndex(currentListCardForAction, activeListsData);
             const itemIndex = findItemIndex(currentItemForAction, activeListsData[listIndex].items);
-            
             activeListsData[listIndex].items[itemIndex].name = newName;
             activeListsData[listIndex].items[itemIndex].weight = newWeight;
             saveData(ACTIVE_LISTS_STORAGE_KEY, activeListsData);
@@ -586,16 +591,14 @@
             closeModal('editItemModal');
         }
 
-        // --- Delete Item from Active List ---
         function openDeleteItemConfirmModal(itemId, listId) {
             const listIndex = findListIndex(listId, activeListsData);
             if (listIndex === -1) return;
             const itemIndex = findItemIndex(itemId, activeListsData[listIndex].items);
             if (itemIndex === -1) return;
             const itemName = activeListsData[listIndex].items[itemIndex].name;
-
             document.getElementById('confirmModalTitle').textContent = "Delete Item";
-            document.getElementById('confirmModalMessage').textContent = `Delete item "${itemName}" from this list?`;
+            document.getElementById('confirmModalMessage').textContent = `Delete item "${itemName}"?`;
             document.getElementById('confirmModalConfirmBtn').textContent = "Delete";
             confirmModalCallback = () => {
                 activeListsData[listIndex].items.splice(itemIndex, 1);
@@ -605,32 +608,30 @@
             openModal('confirmModal');
         }
         
-        // --- Generic Confirmation Modal Closer ---
         function closeConfirmModal(isConfirmed) {
             if (isConfirmed && typeof confirmModalCallback === 'function') confirmModalCallback();
             confirmModalCallback = null; closeModal('confirmModal');
             currentListCardForAction = null; currentItemForAction = null;
         }
 
-
-        // --- Render History Tab ---
         function renderHistoryTab() {
             const historyArea = document.getElementById('history-tab-content-area');
             historyArea.innerHTML = '';
             if (historyData.length === 0) {
                 historyArea.innerHTML = '<p style="text-align: center; color: var(--text-light); margin-top: 20px;">No archived lists yet.</p>'; return;
             }
+            // Sort history data again just in case (should be sorted on add)
+            historyData.sort((a, b) => new Date(b.completionDateISO) - new Date(a.completionDateISO));
             const grouped = historyData.reduce((acc, list) => {
                 const dateKey = new Date(list.completionDateISO).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
                 if (!acc[dateKey]) acc[dateKey] = []; acc[dateKey].push(list); return acc;
             }, {});
             const sortedDateKeys = Object.keys(grouped).sort((a,b) => new Date(b) - new Date(a));
-
             for (const dateKey of sortedDateKeys) {
                 const groupDiv = document.createElement('div'); groupDiv.classList.add('history-date-group');
                 groupDiv.innerHTML = `<h4>${dateKey}</h4>`;
                 grouped[dateKey].forEach(list => {
-                    const card = createHistoryListCardDOM(list); // Use a dedicated DOM creator for history
+                    const card = createHistoryListCardDOM(list);
                     groupDiv.appendChild(card);
                 });
                 historyArea.appendChild(groupDiv);
@@ -638,10 +639,10 @@
         }
 
         function createHistoryListCardDOM(listData) {
-            const originalCreationDate = new Date(listData.originalCreationDateISO || listData.creationDateISO).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const originalCreationDate = new Date(listData.creationDateISO).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year:'2-digit' });
             const card = document.createElement('div');
             card.classList.add('history-list-card');
-            card.dataset.listId = listData.id; // Store ID for potential delete from history
+            card.dataset.listId = listData.id; 
 
             card.innerHTML = `
                 <div class="history-list-header">
@@ -670,10 +671,7 @@
                     ${listData.items.length === 0 ? '<li><p style="font-style:italic; color:var(--text-light); padding: 5px 0;">No items in this list.</p></li>' : ''}
                 </ul>`;
             card.querySelector('.history-list-header').addEventListener('click', (e) => {
-                // Prevent toggle if delete button is clicked
-                if (!e.target.closest('.delete-history-btn')) {
-                    card.classList.toggle('expanded');
-                }
+                if (!e.target.closest('.delete-history-btn')) card.classList.toggle('expanded');
             });
             card.querySelector('.delete-history-btn').addEventListener('click', () => openDeleteFromHistoryModal(listData.id));
             return card;
@@ -683,9 +681,8 @@
             const listIndex = findListIndex(listId, historyData);
             if(listIndex === -1) return;
             const listTitle = historyData[listIndex].title;
-
             document.getElementById('confirmModalTitle').textContent = "Delete from History";
-            document.getElementById('confirmModalMessage').textContent = `Permanently delete list "${listTitle}" from history? This cannot be undone.`;
+            document.getElementById('confirmModalMessage').textContent = `Permanently delete list "${listTitle}" from history?`;
             document.getElementById('confirmModalConfirmBtn').textContent = "Delete";
             confirmModalCallback = () => {
                 historyData.splice(listIndex, 1);
@@ -695,13 +692,14 @@
             openModal('confirmModal');
         }
 
-
-        // --- Download List as PDF --- (Same as your last enhanced version)
-        function downloadListAsPDF(listCardEl) {
+        function downloadListAsPDF(listData) { // Now accepts listData object
             const doc = new jsPDF({orientation: 'p', unit: 'mm', format: 'a4'});
-            const listTitle = listCardEl.querySelector('.list-title').textContent;
-            const listDate = listCardEl.querySelector('.list-date-stamp').textContent;
-            const listTotal = listCardEl.querySelector('.list-total-price .total-value').textContent;
+            const listTitle = listData.title;
+            const listDate = new Date(listData.creationDateISO).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + " (Created)";
+            let totalCost = 0;
+            listData.items.forEach(item => { if(item.purchased && item.price) totalCost += item.price; });
+            const listTotal = `$${totalCost.toFixed(2)}`;
+
             const pageMargin = 15, pageWidth = doc.internal.pageSize.getWidth(), pageHeight = doc.internal.pageSize.getHeight();
             const contentWidth = pageWidth - (2 * pageMargin); let yPos = pageMargin + 10;
             const lineSpacing = 6, itemIndent = pageMargin + 5, detailsIndent = itemIndent + 5;
@@ -712,20 +710,21 @@
             doc.text(listDate, pageWidth / 2, yPos, { align: 'center' }); yPos += lineSpacing * 2.5;
             doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(0, 0, 0);
 
-            listCardEl.querySelectorAll('.item-list .item').forEach((itemEl) => {
+            listData.items.forEach((item) => { // Use item from listData
                 if (yPos > pageHeight - pageMargin - 20) { addPdfFooter(doc, pageMargin, pageHeight); doc.addPage(); yPos = pageMargin + 10; }
-                const checkbox = itemEl.querySelector('input[type="checkbox"]'); const name = itemEl.querySelector('.item-name').textContent;
-                const weightEl = itemEl.querySelector('.item-weight'); const weight = weightEl ? weightEl.textContent : '';
-                const priceVal = itemEl.querySelector('.price-value').textContent; const notesVal = itemEl.querySelector('.notes-value').textContent;
-                const statusSymbol = checkbox.checked ? "☑" : "☐";
-                let itemText = `${statusSymbol}  ${name} ${weight}`; let textLines = doc.splitTextToSize(itemText, contentWidth - 20);
+                const statusSymbol = item.purchased ? "☑" : "☐";
+                let itemText = `${statusSymbol}  ${item.name} ${item.weight ? '('+item.weight+')' : ''}`;
+                let textLines = doc.splitTextToSize(itemText, contentWidth - 20);
                 doc.text(textLines, itemIndent, yPos); yPos += (textLines.length * lineSpacing * 0.8);
-                if (priceVal || notesVal) {
+                if (item.price > 0 || item.notes) {
                      if (yPos > pageHeight - pageMargin - 20) { addPdfFooter(doc, pageMargin, pageHeight); doc.addPage(); yPos = pageMargin + 10; }
                     doc.setFontSize(9); doc.setTextColor(80, 80, 80); let detailsString = "";
-                    if (priceVal) detailsString += `${priceVal}`; if (notesVal) detailsString += (priceVal ? "  |  " : "") + `Notes: ${notesVal}`;
-                    let detailTextLines = doc.splitTextToSize(detailsString, contentWidth - 25);
-                    doc.text(detailTextLines, detailsIndent, yPos); yPos += (detailTextLines.length * lineSpacing * 0.7);
+                    if (item.purchased && item.price > 0) detailsString += `$${item.price.toFixed(2)}`;
+                    if (item.notes) detailsString += (item.purchased && item.price > 0 ? "  |  " : "") + `Notes: ${item.notes}`;
+                    if(detailsString) {
+                        let detailTextLines = doc.splitTextToSize(detailsString, contentWidth - 25);
+                        doc.text(detailTextLines, detailsIndent, yPos); yPos += (detailTextLines.length * lineSpacing * 0.7);
+                    }
                     doc.setFontSize(11); doc.setTextColor(0,0,0);
                 }
                 yPos += lineSpacing * 0.5; doc.setDrawColor(220, 220, 220);
@@ -747,13 +746,10 @@
             doc.text("Generated by ShopSpot", margin, pageH - (margin/2) + 3);
         }
         
-        // --- Initial Setup ---
         document.addEventListener('DOMContentLoaded', () => {
             activeListsData = loadData(ACTIVE_LISTS_STORAGE_KEY);
             historyData = loadData(HISTORY_STORAGE_KEY);
-            
-            showMainTab('home-tab', document.querySelector('.bottom-nav .nav-item.active')); // Default to home tab
-            // renderActiveLists() and renderHistoryTab() will be called by showMainTabContent
+            showMainTab('home-tab', document.querySelector('.bottom-nav .nav-item.active'));
         });
     </script>
 </body>
